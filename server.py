@@ -3,7 +3,7 @@ import socket
 import threading
 
 host = '127.0.0.1'
-port = 5345
+port = 2459
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind((host, port))
@@ -15,17 +15,21 @@ words = []
 
 def broadcast(message):
     for client in clients:
-        client.send(message)
+        client.send(message.encode('koi8-r'))
 
 
 def handle(client):
     while True:
         try:
             message = client.recv(1024).decode('koi8-r')
-            broadcast(message)
+            if message == 'конецигры':
+                index = clients.index(client)
+                clients.remove(clients[index])
+            elif message != '':
+                broadcast(message)
         except:
             index = clients.index(client)
-            clients.remove(client)
+            clients.remove(clients[index])
             client.close()
             break
 
@@ -35,12 +39,12 @@ def receive():
         client, address = server.accept()
         print("Connected with {}".format(str(address)))
 
-        client.send('WORD'.encode('koi8-r'))
+        client.send('СЛОВО'.encode('koi8-r'))
 
         word = client.recv(1024).decode('koi8-r')
+        print(word)
         words.append(word)
         clients.append(client)
-
 
         thread = threading.Thread(target=handle, args=(client,))
         thread.start()

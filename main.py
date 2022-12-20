@@ -12,7 +12,7 @@ class Game(QWidget):
     def __init__(self):
         super().__init__()
         self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.client.connect(('127.0.0.1', 5345))
+        self.client.connect(('127.0.0.1', 2459))
         self.title = "Wordle"
         self.left = 50
         self.top = 50
@@ -27,6 +27,8 @@ class Game(QWidget):
         self.setWindowTitle(self.title)
         self.getRandomWord()
         self.client.send(self.gameWord.encode('koi8-r'))
+        receive_thread = threading.Thread(target=self.receive)
+        receive_thread.start()
         grid = QGridLayout()
         grid.setRowMinimumHeight(0, 30)
         grid.setRowMinimumHeight(7, 30)
@@ -49,8 +51,8 @@ class Game(QWidget):
 
         positions = [(i + 1, j + 1) for i in range(5) for j in range(5)]
         for i, position in enumerate(positions):
-            self.gameBoxes[position[0]-1].append(QLineEdit())
-            grid.addWidget(self.gameBoxes[position[0]-1][position[1]-1],*position)
+            self.gameBoxes[position[0] - 1].append(QLineEdit())
+            grid.addWidget(self.gameBoxes[position[0] - 1][position[1] - 1], *position)
 
         for i, row in enumerate(self.gameBoxes):
             for gameBox in row:
@@ -73,13 +75,14 @@ class Game(QWidget):
                     background: 'light grey';  
                     """)
 
-        #User message
+        # User message
         self.userMessage = QLabel(" ")
         self.userMessage.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.userMessage.setStyleSheet("""
         font-size: 16px
         """)
         grid.addWidget(self.userMessage, 7, 0, 1, 7)
+
 
         # button_reset
         self.buttonReset = QPushButton("Играть снова")
@@ -120,7 +123,6 @@ class Game(QWidget):
         self.buttonGuess.clicked.connect(self.send_on_server)
         grid.addWidget(self.buttonGuess, 8, 2, 1, 3)
 
-
     def send_on_server(self):
         currentRowWord = ''
         for i in self.gameBoxes[self.currentRow]:
@@ -128,16 +130,11 @@ class Game(QWidget):
         message = currentRowWord
         self.client.send(message.encode('koi8-r'))
 
-        receive_thread = threading.Thread(target=self.receive)
-
-        receive_thread.start()
-
     def receive(self):
         while True:
             try:
                 message = self.client.recv(1024).decode('koi8-r')
-                print(message)
-                if message != 'WORD':
+                if message != 'СЛОВО':
                     self.buttonGuessClicked(message)
 
 
@@ -146,15 +143,11 @@ class Game(QWidget):
                 self.client.close()
                 break
 
-
-
     def getRandomWord(self):
         with open('words.txt', 'r') as file:
             words_file = file.read()
             words = list(map(str, words_file.split()))
             self.gameWord = random.choice(words)
-
-
 
     def buttonResetClicked(self):
         self.getRandomWord()
@@ -180,15 +173,11 @@ class Game(QWidget):
                     """)
         self.buttonSwap()
 
-
-
     def buttonGuessClicked(self, message):
         if self.checkInputsValid(message) == False:
             self.userMessage.setText("Вводите только русские буквы!")
-            self.userMessage.repaint()
         elif self.checkWin(message) == False:
             self.userMessage.setText(" ")
-            self.userMessage.repaint()
             if self.currentRow < 4:
                 self.colourActiveRow()
                 self.activateNextRow()
@@ -198,12 +187,11 @@ class Game(QWidget):
 
     def gameOver(self):
         self.userMessage.setText(f"Вы проиграли:( Слово {self.gameWord}")
-        self.userMessage.repaint()
         self.buttonSwap()
 
     def activateNextRow(self):
         for i in range(5):
-            self.gameBoxes[self.currentRow+1][i].setStyleSheet("""
+            self.gameBoxes[self.currentRow + 1][i].setStyleSheet("""
             border: 2px solid '#000000';
                 font-size: 30px;
                 margin: 10px 10px 10px 10px;
@@ -211,7 +199,6 @@ class Game(QWidget):
             """)
             self.gameBoxes[self.currentRow + 1][i].setReadOnly(False)
         self.currentRow += 1
-
 
     def colourActiveRow(self):
         for i in range(5):
@@ -254,8 +241,9 @@ class Game(QWidget):
                 """)
                 i.setReadOnly(True)
             self.userMessage.setText('ПОБЕДА!')
-            self.userMessage.repaint()
-            self.buttonSwap()
+            message = 'конецигры'
+            self.client.send(message.encode('koi8-r'))
+
         return win
 
     def buttonSwap(self):
@@ -266,15 +254,13 @@ class Game(QWidget):
             self.buttonReset.hide()
             self.buttonGuess.show()
 
-
-    def checkInputsValid(self,message, alphabet=set('абвгдеёжзийклмнопрстуфхцчшщъыьэюя')):
+    def checkInputsValid(self, message):
+        alphabet = set('абвгдеёжзийклмнопрстуфхцчшщъыьэюя')
         valid = True
         for i in message:
-            if i.text().lower() not in alphabet:
+            if i.lower() not in alphabet:
                 valid = False
         return valid
-
-
 
 
 if __name__ == '__main__':
