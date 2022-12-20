@@ -1,4 +1,6 @@
+import socket
 import sys, random
+import threading
 
 import PyQt6.sip
 from PyQt6.QtWidgets import *
@@ -9,19 +11,22 @@ from PyQt6.QtCore import *
 class Game(QWidget):
     def __init__(self):
         super().__init__()
+        self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.client.connect(('127.0.0.1', 5345))
         self.title = "Wordle"
         self.left = 50
         self.top = 50
         self.width = 600
         self.height = 500
         self.currentRow = 0
-        self.gameWord = "ножка"
+        self.gameWord = ""
         self.defaultUI()
 
     def defaultUI(self):
         self.setGeometry(self.left, self.top, self.width, self.height)
         self.setWindowTitle(self.title)
-        #self.getRandomWord()
+        self.getRandomWord()
+        self.client.send(self.gameWord.encode('koi8-r'))
         grid = QGridLayout()
         grid.setRowMinimumHeight(0, 30)
         grid.setRowMinimumHeight(7, 30)
@@ -31,7 +36,7 @@ class Game(QWidget):
         background: 'white';
         """)
         self.setLayout(grid)
-        self.titleLabel = QLabel("5 букв")
+        self.titleLabel = QLabel("5 БУКВ")
         self.titleLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setStyleSheet("""
         font-size: 40px;
@@ -112,8 +117,35 @@ class Game(QWidget):
                 color: 'white';
                 }
                 """)
-        self.buttonGuess.clicked.connect(self.buttonGuessClicked)
+        self.buttonGuess.clicked.connect(self.send_on_server)
         grid.addWidget(self.buttonGuess, 8, 2, 1, 3)
+
+
+    def send_on_server(self):
+        currentRowWord = ''
+        for i in self.gameBoxes[self.currentRow]:
+            currentRowWord += i.text().lower()
+        message = currentRowWord
+        self.client.send(message.encode('koi8-r'))
+
+        receive_thread = threading.Thread(target=self.receive)
+
+        receive_thread.start()
+
+    def receive(self):
+        while True:
+            try:
+                message = self.client.recv(1024).decode('koi8-r')
+                print(message)
+                if message != 'WORD':
+                    self.buttonGuessClicked(message)
+
+
+            except:
+                self.userMessage.setText("Error! Reload app")
+                self.client.close()
+                break
+
 
 
     def getRandomWord(self):
@@ -122,10 +154,12 @@ class Game(QWidget):
             words = list(map(str, words_file.split()))
             self.gameWord = random.choice(words)
 
+
+
     def buttonResetClicked(self):
         self.getRandomWord()
         self.currentRow = 0
-        self.userMessage = " "
+        self.userMessage.setText(" ")
         for i, row in enumerate(self.gameBoxes):
             for box in row:
                 box.setStyleSheet("""
@@ -148,11 +182,11 @@ class Game(QWidget):
 
 
 
-    def buttonGuessClicked(self):
-        if self.checkInputsValid() == False:
+    def buttonGuessClicked(self, message):
+        if self.checkInputsValid(message) == False:
             self.userMessage.setText("Вводите только русские буквы!")
             self.userMessage.repaint()
-        elif self.checkWin() == False:
+        elif self.checkWin(message) == False:
             self.userMessage.setText(" ")
             self.userMessage.repaint()
             if self.currentRow < 4:
@@ -207,12 +241,9 @@ class Game(QWidget):
                 margin: 10px 10px 10px;
                 """)
 
-    def checkWin(self):
-        currentRowWord = ""
+    def checkWin(self, message):
         win = False
-        for i in self.gameBoxes[self.currentRow]:
-            currentRowWord += i.text()
-        if currentRowWord == self.gameWord:
+        if message == self.gameWord:
             win = True
             for i in self.gameBoxes[self.currentRow]:
                 i.setStyleSheet("""
@@ -236,9 +267,9 @@ class Game(QWidget):
             self.buttonGuess.show()
 
 
-    def checkInputsValid(self, alphabet=set('абвгдеёжзийклмнопрстуфхцчшщъыьэюя')):
+    def checkInputsValid(self,message, alphabet=set('абвгдеёжзийклмнопрстуфхцчшщъыьэюя')):
         valid = True
-        for i in self.gameBoxes[self.currentRow]:
+        for i in message:
             if i.text().lower() not in alphabet:
                 valid = False
         return valid
