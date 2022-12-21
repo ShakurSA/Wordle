@@ -3,7 +3,7 @@ import socket
 import threading
 
 host = '127.0.0.1'
-port = 2459
+port = 2454
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind((host, port))
@@ -13,9 +13,8 @@ clients = []
 words = []
 
 
-def broadcast(message):
-    for client in clients:
-        client.send(message.encode('koi8-r'))
+def broadcast(message, client):
+    client.send(message.encode('koi8-r'))
 
 
 def handle(client):
@@ -26,7 +25,7 @@ def handle(client):
                 index = clients.index(client)
                 clients.remove(clients[index])
             elif message != '':
-                broadcast(message)
+                broadcast(message, client)
         except:
             index = clients.index(client)
             clients.remove(clients[index])
